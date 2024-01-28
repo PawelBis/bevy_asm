@@ -1,33 +1,41 @@
-use std::rc::Rc;
+mod asset;
 
-use bevy::{asset::LoadedFolder, prelude::*};
+use asset::{AssetType, DbAsset};
+use bevy::{prelude::*, utils};
+use rusqlite::Connection;
+use std::{env, sync::Mutex};
+use thiserror::Error;
 
-/// Asset manager plugin
+#[derive(Debug, Error)]
+enum Error {
+    #[error("failed to read CARGO_MANIFEST_DIR env var")]
+    MissingCargoManifestDir(#[from] std::env::VarError),
+    #[error("failed to open SQLite connection")]
+    FailedToOpenSqliteConnection(#[from] rusqlite::Error),
+}
+
+#[derive(Resource)]
+struct DbConnection(Mutex<Connection>);
+
+/// This plugin creates an asset database. This db stores asset metadata.
+/// Db enables easy filtering and searching, and for medium scale it should be enough.
 pub struct BevyAsmPlugin;
-
-#[derive(Resource, Deref, Clone)]
-struct LoadedFolderHandle(Handle<LoadedFolder>);
 
 impl Plugin for BevyAsmPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, load_asset_folder).add_systems(
-            Update,
-            show_asset_count.run_if(resource_exists::<LoadedFolderHandle>()),
-        );
+        app.add_systems(Startup, setup_db.map(utils::error));
     }
 }
 
-fn load_asset_folder(mut commands: Commands, asset_server: Res<AssetServer>) {
-    let folder_handle = asset_server.load_folder("");
-    commands.insert_resource(LoadedFolderHandle(folder_handle));
-}
+fn setup_db(mut commands: Commands) -> Result<(), Error> {
+    let manifest_path = env::var("CARGO_MANIFEST_DIR")?;
+    let _db_path = format!("{}/{}", manifest_path, "assetdb");
+    //let db = Connection::open(db_path)?;
+    let db = Connection::open_in_memory()?;
 
-fn show_asset_count(
-    loaded_folder_handle: Res<LoadedFolderHandle>,
-    folder_assets: Res<Assets<LoadedFolder>>,
-) {
-    let lfh = &*loaded_folder_handle;
-    if let Some(folder) = folder_assets.get(&lfh.0) {
-        println!("Cnt: {}", folder.handles.len());
-    };
+    AssetType::create_table(&db)?;
+    DbAsset::create_table(&db)?;
+
+    commands.insert_resource(DbConnection(Mutex::new(db)));
+    Ok(())
 }
