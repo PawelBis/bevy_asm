@@ -16,6 +16,8 @@ enum Error {
     MissingCargoManifestDir(#[from] std::env::VarError),
     #[error("failed to open SQLite connection")]
     DbError(#[from] rusqlite::Error),
+    #[error("failed WalkDir iteration: {0}")]
+    WalkDirError(#[from] walkdir::Error),
     #[error("parent directory missing")]
     ParentDirectoryMissing,
     #[error("filename missing")]
@@ -93,7 +95,7 @@ fn scan_fs_for_assets(db: &Connection, assets_dir: String) -> Result<(), Error> 
     let mut dir_to_id = HashMap::<String, u32>::new();
     let mut current_id: u32 = 1;
     for entry in WalkDir::new(assets_dir) {
-        let entry = entry.unwrap();
+        let entry = entry?;
         let entry_path = entry.path();
         let entry_filename = entry.file_name().to_str();
         let parent_name = entry_path
