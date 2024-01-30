@@ -48,6 +48,14 @@ impl AssetType {
             AssetType::Untyped
         }
     }
+
+    // TODO: Replace with proper derive
+    pub fn to_u32(&self) -> u32 {
+        match self {
+            AssetType::Untyped => 0,
+            AssetType::Image => 1,
+        }
+    }
 }
 
 impl From<TypeId> for AssetType {
