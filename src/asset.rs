@@ -61,10 +61,16 @@ impl From<TypeId> for AssetType {
 }
 
 pub struct DbAsset {
+    /// Id in the db
     pub id: u32,
+    /// Name of the asset - can
     pub name: String,
-    pub path: String,
+    /// Path to the asset or it's descriptor
+    pub path: Option<String>,
+    /// Type of the asset, extension based
     pub asset_type: AssetType,
+    /// In what directory is the asset located
+    pub parent_directory: u32,
 }
 
 impl DbAsset {
@@ -77,8 +83,10 @@ impl DbAsset {
                 name TEXT NOT NULL,
                 path TEXT,
                 type INTEGER,
-                FOREIGN KEY(type) REFERENCES asset_type(id)
-            )
+                parent_directory INTEGER,
+                FOREIGN KEY(type) REFERENCES asset_type(id),
+                FOREIGN KEY(parent_directory) REFERENCES directory(id)
+            );
             "#,
             (),
         )?;
