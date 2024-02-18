@@ -15,9 +15,9 @@ enum Error {
     #[error("failed to read CARGO_MANIFEST_DIR env var")]
     MissingCargoManifestDir(#[from] std::env::VarError),
     #[error("failed to open SQLite connection")]
-    DbError(#[from] rusqlite::Error),
+    Db(#[from] rusqlite::Error),
     #[error("failed WalkDir iteration: {0}")]
-    WalkDirError(#[from] walkdir::Error),
+    WalkDir(#[from] walkdir::Error),
     #[error("parent directory missing")]
     ParentDirectoryMissing,
     #[error("filename missing")]
