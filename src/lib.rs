@@ -1,10 +1,7 @@
 mod asset;
 
 use asset::{AssetType, DbAsset};
-use bevy::{
-    prelude::*,
-    utils::{self, HashMap},
-};
+use bevy::{prelude::*, utils::HashMap};
 use rusqlite::Connection;
 use std::{env, sync::Mutex};
 use thiserror::Error;
@@ -33,27 +30,37 @@ enum Error {
 #[derive(Resource, Debug)]
 struct DbConnection(Mutex<Connection>);
 
+#[derive(Default, Debug, Clone)]
+pub enum DbMode {
+    /// DB will be created only in the RAM.
+    #[default]
+    InMemory,
+    /// DB will be created in file-system mode. Provided string will
+    /// be used as a db name.
+    FileSystem(String),
+    /// Unsupported
+    Cloud,
+}
+
 /// This plugin creates an asset database. This db stores asset metadata.
-/// Db enables easy filtering and searching, and for medium scale it should be enough.
+/// Db enables an easy filtering/searching.
+///
+/// Db can be created as an 'in-memory' database or it can persist data using
+/// a file-based storage engine.
 #[derive(Clone, Debug, Resource)]
 pub struct BevyAsmPlugin {
-    pub use_in_memory_db: bool,
+    pub db_mode: DbMode,
 }
 
 impl Plugin for BevyAsmPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(self.clone()).add_systems(
-            Startup,
-            (
-                // Use `apply_deferred` to make sure that our insert resource was executed properly
-                apply_deferred,
-                setup_db.map(utils::error).after(apply_deferred),
-            ),
-        );
+        let db_connection = setup_db(self).unwrap();
+        app.insert_resource(self.clone())
+            .insert_resource(db_connection);
     }
 }
 
-fn setup_db(mut commands: Commands, config: Res<BevyAsmPlugin>) -> Result<(), Error> {
+fn setup_db(config: &BevyAsmPlugin) -> Result<DbConnection, Error> {
     let manifest_path = env::var("CARGO_MANIFEST_DIR")?;
     // Default asset directory path can be changed with `BEVY_ASSET_ROOT` env var
     let assets_dir = match env::var("BEVY_ASSET_ROOT") {
@@ -61,11 +68,13 @@ fn setup_db(mut commands: Commands, config: Res<BevyAsmPlugin>) -> Result<(), Er
         Err(_) => format!("{}/{}", manifest_path, "assets"),
     };
 
-    let db = if config.use_in_memory_db {
-        Connection::open_in_memory()?
-    } else {
-        let db_path = format!("{}/{}", manifest_path, "assetdb");
-        Connection::open(db_path)?
+    let db = match &config.db_mode {
+        DbMode::InMemory => Connection::open_in_memory()?,
+        DbMode::FileSystem(name) => {
+            let db_path = format!("{}/{}", assets_dir, &name);
+            Connection::open(db_path)?
+        }
+        DbMode::Cloud => unimplemented!(),
     };
 
     AssetType::create_table(&db)?;
@@ -85,8 +94,7 @@ fn setup_db(mut commands: Commands, config: Res<BevyAsmPlugin>) -> Result<(), Er
 
     scan_fs_for_assets(&db, assets_dir)?;
 
-    commands.insert_resource(DbConnection(Mutex::new(db)));
-    Ok(())
+    Ok(DbConnection(Mutex::new(db)))
 }
 
 /// Use `WalkDir` to iterate through assets directory, and populate `directory` and
