@@ -1,10 +1,12 @@
 mod asset;
+mod db;
 
 use asset::{AssetType, DbAsset};
 use bevy::{prelude::*, utils::HashMap};
 use rusqlite::Connection;
 use std::{env, sync::Mutex};
 use thiserror::Error;
+use tokio::runtime::Handle;
 use walkdir::WalkDir;
 
 #[derive(Debug, Error)]
@@ -36,7 +38,7 @@ pub enum DbMode {
     #[default]
     InMemory,
     /// DB will be created in file-system mode. Provided string will
-    /// be used as a db name.
+    /// be used as a filename.
     FileSystem(String),
     /// Unsupported
     Cloud,
@@ -49,6 +51,7 @@ pub enum DbMode {
 /// a file-based storage engine.
 #[derive(Clone, Debug, Resource)]
 pub struct BevyAsmPlugin {
+    pub runtime: Handle,
     pub db_mode: DbMode,
 }
 
@@ -65,7 +68,7 @@ fn setup_db(config: &BevyAsmPlugin) -> Result<DbConnection, Error> {
     // Default asset directory path can be changed with `BEVY_ASSET_ROOT` env var
     let assets_dir = match env::var("BEVY_ASSET_ROOT") {
         Ok(path) => path,
-        Err(_) => format!("{}/{}", manifest_path, "assets"),
+        Err(_) => format!("{manifest_path}/assets"),
     };
 
     let db = match &config.db_mode {
